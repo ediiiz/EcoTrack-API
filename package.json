@@ -1,12 +1,12 @@
 {
   "name": "mtrack-api",
   "version": "1.0.0",
-  "description": "Converts MTrack Telnet to API",
+  "description": "Converts MTrack Telnet to REST API",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "compile": "tsc",
-    "start": "npm run compile && node --inspect dist/index.js"
+    "start": "npm run compile && node dist/index.js"
   },
   "author": "",
   "license": "ISC",
