@@ -1,9 +1,9 @@
 import { createHmac } from 'crypto';
-import { env } from 'process';
-import net from 'net';
+import { Telnet } from 'telnet-client';
+import { PrismaClient } from '@prisma/client';
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+import { env } from 'process';
 
 function Sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -23,9 +23,13 @@ const telnetCMD = {
   gprsOn: 'GPRS ON',
 };
 const connectionParams = {
+  debug: true,
   host: mtrackHost,
-  port: tbLocations.big,
+  port: tbLocations.small,
+  negotiationMandatory: false,
   timeout: 1500,
+  irs: '',
+  echoLines: 0,
 };
 const reCollection = {
   GPRMD: /GPRMD/m,
@@ -46,42 +50,34 @@ function generateAnswer(challenge: string) {
   return hash;
 }
 
-async function runTelnet(): Promise<net.Socket> {
-  function connectToTelnet(params: {
+async function runTelnet(): Promise<Telnet> {
+  async function connectToTelnet(params: {
     host: string;
     port: number;
+    negotiationMandatory: boolean;
     timeout: number;
+    irs: string;
+    echoLines: number;
   }) {
-    return new Promise<net.Socket>((resolve, reject) => {
-      const connection = net.createConnection(params, () => {
-        resolve(connection);
-      });
-      connection.on('error', (err: Error) => {
-        reject(err);
-      });
-    });
+    const connection = new Telnet();
+    await connection.connect(params);
+    return connection;
   }
 
   async function sendAndWaitForData({
     connection,
     cmd,
   }: {
-    connection: net.Socket;
+    connection: Telnet;
     cmd: string;
   }) {
-    connection.write(`${cmd}\n`);
-    return new Promise<string>((resolve) => {
-      connection.once('data', (data: Buffer) => {
-        resolve(data.toString());
-      });
-    });
+    await connection.write(`${cmd}\n`);
+    const res = await connection.nextData();
+    return res;
   }
 
-  async function authenticateTelnet(connection: net.Socket) {
-    const res: string = await sendAndWaitForData({
-      connection,
-      cmd: telnetCMD.auth,
-    });
+  async function authenticateTelnet(connection: Telnet) {
+    const res = await sendAndWaitForData({ connection, cmd: telnetCMD.auth });
     const challenge = res?.split(' ')[1];
     if (challenge !== undefined) {
       const hash = generateAnswer(challenge);
@@ -90,31 +86,20 @@ async function runTelnet(): Promise<net.Socket> {
     return null;
   }
 
-  async function enableGPRS(connection: net.Socket) {
+  async function enableGPRS(connection: Telnet) {
     return await sendAndWaitForData({ connection, cmd: telnetCMD.gprsOn });
   }
 
-  function nextData(connection: net.Socket): Promise<string | null> {
-    return new Promise((resolve) => {
-      connection.once('data', (data: Buffer) => {
-        resolve(data.toString());
-      });
-      connection.once('end', () => {
-        resolve(null);
-      });
-    });
-  }
-
   const connection = await connectToTelnet(connectionParams);
-  const data = await nextData(connection);
+  await connection.nextData();
   await authenticateTelnet(connection);
   await enableGPRS(connection);
   return connection;
 }
 
-async function getData(connection: net.Socket) {
+async function getData(connection: Telnet) {
   connection.on('data', function (buffer: string) {
-    loopOverArr(buffer);
+    loopOverArr(buffer, connection);
   });
 }
 
@@ -163,10 +148,11 @@ function getCoordinates(input: string) {
   }
 }
 
-async function loopOverArr(buffer: string) {
+async function loopOverArr(buffer: string, connection: Telnet) {
   try {
     const arr = Buffer.from(buffer, 'hex').toString().split('^M^J');
     for (const key in arr) {
+      console.log(arr[key]);
       const data = getCoordinates(arr[key]);
       if (typeof data !== 'undefined') {
         console.log(data);
