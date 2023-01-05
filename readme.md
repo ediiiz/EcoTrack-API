@@ -7,6 +7,7 @@
 ## Install
 
 - npm Install
+- npx prisma migrate dev
 - npm start
 
 ## Contribution
