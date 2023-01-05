@@ -5,3 +5,9 @@ node_modules
 package-lock.json
 
 .cer
+
+dist/
+
+prisma/
+prisma/*.db-shm
+prisma/*.db-wal

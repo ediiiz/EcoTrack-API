@@ -34,3 +34,4 @@ ALTER TABLE "new_Car" RENAME TO "Car";
 CREATE UNIQUE INDEX "Car_name_key" ON "Car"("name");
 PRAGMA foreign_key_check;
 PRAGMA foreign_keys=ON;
+PRAGMA journal_mode = WAL;

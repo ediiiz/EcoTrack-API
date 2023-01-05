@@ -1,146 +1,31 @@
-import { createHmac } from 'crypto';
-import net from 'net';
-import express from 'express';
-import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
-function Sleep(milliseconds) {
-    return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-const prisma = new PrismaClient();
-const PORT = 3125;
-const app = express().use(cors());
-const mtrackHost = 'dyhvs107.dy.droot.org';
+import { env } from 'process';
+import { etrackAPI } from './api/express.js';
+import { prisma } from './prisma/prisma.js';
+import { createOrUpdateCar } from './prisma/dbOperations.js';
+import { createTelnetConnection } from './createTelnetConnection.js';
+import { getCoordinates } from './getCoordinates.js';
+import { Sleep } from './utils/Sleep.js';
 const tbLocations = {
     small: 27,
     medium: 22,
     big: 23,
 };
-const telnetCMD = {
-    auth: 'AUTH -SASL CRAM-MD5',
-    gprsOn: 'GPRS ON',
-};
-const connectionParams = {
-    host: mtrackHost,
+export const connectionParams = {
+    host: env.MTRACKHOST,
     port: tbLocations.big,
     timeout: 1500,
 };
-const reCollection = {
-    GPRMD: /GPRMD/m,
-    VehicleName: /\$(.*)\$/m,
-    Coordinates: /A,(.*),N,(.*),E/g,
-    DegreesMinutes: /(.*)(\d\d)\./m,
-    Seconds: /\.(.*)/m,
-};
-function generateAnswer(challenge) {
-    let username = 'dyckerhoff';
-    let password = 'dyckerhoff';
-    challenge = Buffer.from(challenge, 'base64').toString();
-    const digest = createHmac('md5', password).update(challenge).digest('hex');
-    const hash = Buffer.from(`${username} ${digest}`, 'binary').toString('base64');
-    return hash;
-}
-async function runTelnet() {
-    function connectToTelnet(params) {
-        return new Promise((resolve, reject) => {
-            const connection = net.createConnection(params, () => {
-                resolve(connection);
-            });
-            connection.on('error', (err) => {
-                reject(err);
-            });
-        });
-    }
-    async function sendAndWaitForData({ connection, cmd, }) {
-        connection.write(`${cmd}\n`);
-        return new Promise((resolve) => {
-            connection.once('data', (data) => {
-                resolve(data.toString());
-            });
-        });
-    }
-    async function authenticateTelnet(connection) {
-        const res = await sendAndWaitForData({
-            connection,
-            cmd: telnetCMD.auth,
-        });
-        const challenge = res?.split(' ')[1];
-        if (challenge !== undefined) {
-            const hash = generateAnswer(challenge);
-            return await sendAndWaitForData({ connection, cmd: hash });
-        }
-        return null;
-    }
-    async function enableGPRS(connection) {
-        return await sendAndWaitForData({ connection, cmd: telnetCMD.gprsOn });
-    }
-    function nextData(connection) {
-        return new Promise((resolve) => {
-            connection.once('data', (data) => {
-                resolve(data.toString());
-            });
-            connection.once('end', () => {
-                resolve(null);
-            });
-        });
-    }
-    const connection = await connectToTelnet(connectionParams);
-    const data = await nextData(connection);
-    await authenticateTelnet(connection);
-    await enableGPRS(connection);
-    return connection;
-}
 async function getData(connection) {
-    connection.on('data', function (buffer) {
-        loopOverArr(buffer);
+    connection.on('data', function (data) {
+        loopOverData(data);
     });
 }
-function getCoordinates(input) {
-    function DMM2DD({ DMM }) {
-        const matches = DMM.match(reCollection.DegreesMinutes);
-        if (matches) {
-            const degrees = parseInt(matches[1]);
-            const minutes = parseInt(matches[2].replace('0', ''));
-            const seconds = parseFloat(`.${DMM.match(reCollection.Seconds)?.[1]}`);
-            const decimalDegress = degrees + (minutes + seconds) / 60;
-            return parseFloat(decimalDegress.toFixed(6));
-        }
-    }
-    function getData(input) {
-        const matches = input.match(reCollection.GPRMD);
-        if (matches && matches[0]) {
-            const vehicle = input.match(reCollection.VehicleName)?.[1];
-            for (const match of input.matchAll(reCollection.Coordinates)) {
-                const data = {
-                    vehicle,
-                    north: match[1],
-                    east: match[2],
-                };
-                return data;
-            }
-        }
-        else {
-            return { vehicle: undefined, north: undefined, east: undefined };
-        }
-    }
-    const data = getData(input);
-    if (typeof data !== 'undefined' && typeof data.vehicle !== 'undefined') {
-        const { vehicle, north, east } = data;
-        const lat = DMM2DD({ DMM: north });
-        const lng = DMM2DD({ DMM: east });
-        return { vehicle, lat, lng };
-    }
-    else {
-        return undefined;
-    }
-}
-async function loopOverArr(buffer) {
+async function loopOverData(data) {
     try {
-        const arr = Buffer.from(buffer, 'hex').toString().split('^M^J');
+        let arr = data.toString().split('^M^J');
         for (const key in arr) {
-            console.log(arr[key]);
-            const data = getCoordinates(arr[key]);
+            let data = getCoordinates(arr[key]);
             if (typeof data !== 'undefined') {
-                console.log(data);
                 createOrUpdateCar(data);
             }
         }
@@ -151,81 +36,20 @@ async function loopOverArr(buffer) {
         console.log(error);
     }
 }
-async function findCar(vehicle) {
-    const car = await prisma.car.findUnique({
-        where: {
-            name: vehicle,
-        },
-    });
-    return car;
-}
-async function createOrUpdateCar({ vehicle, lat, lng, }) {
-    const car = await prisma.car.upsert({
-        where: {
-            name: vehicle,
-        },
-        create: {
-            name: vehicle,
-            longitude: lng,
-            latitude: lat,
-            timestamp: new Date(),
-        },
-        update: {
-            name: vehicle,
-            longitude: lng,
-            latitude: lat,
-            updatedAt: new Date(),
-        },
-    });
-    return car;
-}
-// Define the endpoint for default Message
-app.get('/', async (req, res) => {
-    res.send('ETrack API - /cars - /cars/:id');
-});
-// Define the endpoint for returning all cars
-app.get('/cars', async (req, res) => {
-    // Use the Prisma client to query the cars from the database
-    const cars = await prisma.car.findMany();
-    // Return the cars as a JSON response
-    res.json(cars);
-});
-// Define the endpoint for returning all cars
-app.get('/carsOnline', async (req, res) => {
-    // Use the Prisma client to query the cars from the database
-    const cars = await prisma.car.findMany({
-        where: {
-            NOT: {
-                updatedAt: null,
-            },
-        },
-    });
-    // Return the cars as a JSON response
-    res.json(cars);
-});
-// Define the endpoint for returning selected cars
-app.get('/cars/:id', async (req, res) => {
-    const { id } = req.params;
-    // Use the Prisma client to query the car by its ID
-    const car = await findCar(id);
-    // Return the car as a JSON response
-    res.json(car);
-});
 //MAIN
 async function main() {
     async function setup() {
         await prisma.car.deleteMany({});
-        app.listen(PORT, () => {
-            console.log(`Server is running on http://localhost:${PORT}`);
+        etrackAPI.listen(env.APIPORT, () => {
+            console.log(`API is running on http://0.0.0.0:${env.APIPORT}`);
         });
     }
     setup();
-    const connection = await runTelnet();
-    //console.log(connection);
+    const connection = await createTelnetConnection();
+    Sleep(2000);
     getData(connection);
     prisma.$on('beforeExit', async () => {
         console.log('beforeExit hook');
-        // PrismaClient still available
         prisma.$disconnect();
     });
 }
