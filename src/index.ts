@@ -1,8 +1,8 @@
 import net from 'net';
 import { env } from 'process';
 import { etrackAPI } from './api/express.js';
-import { prisma } from './prisma/prisma.js';
-import { createOrUpdateCar, findCar } from './prisma/dbOperations.js';
+import { prisma } from './db/prisma.js';
+import { createOrUpdateCar, findCar } from './db/dbOperations.js';
 import { createTelnetConnection } from './createTelnetConnection.js';
 import { getCoordinates } from './getCoordinates.js';
 import { Sleep } from './utils/Sleep.js';

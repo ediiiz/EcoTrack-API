@@ -8,6 +8,6 @@ package-lock.json
 
 dist/
 
-prisma/
+prisma/*.db
 prisma/*.db-shm
 prisma/*.db-wal

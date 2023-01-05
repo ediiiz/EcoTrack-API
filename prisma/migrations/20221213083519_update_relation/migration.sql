@@ -8,7 +8,7 @@
   - Added the required column `timestamp` to the `Car` table without a default value. This is not possible if the table is not empty.
 
 */
--- DropIndex
+-- DropIndexs
 DROP INDEX "Coordinates_carId_key";
 
 -- DropTable
