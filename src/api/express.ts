@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { prisma } from '../db/prisma.js';
-import { findCar, createOrUpdateCar } from '../db/dbOperations.js';
+import { findCar } from '../db/dbOperations.js';
 
 const etrackAPI = express().use(cors());
 

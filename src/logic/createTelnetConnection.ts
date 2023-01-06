@@ -1,9 +1,11 @@
 import net from 'net';
 import { env } from 'process';
 import { generateAnswer } from './generateAnswer.js';
-import { connectionParams } from './index.js';
+import { connectionParams } from '../index.js';
+import { loopOverData } from './loopOverData.js';
+import { Sleep } from '../utils/Sleep.js';
 
-export async function createTelnetConnection(): Promise<net.Socket> {
+async function createTelnetConnection(): Promise<net.Socket> {
   function connectToTelnet(params: {
     host: string;
     port: number;
@@ -71,5 +73,14 @@ export async function createTelnetConnection(): Promise<net.Socket> {
   console.log(data);
   await authenticateTelnet(connection);
   await enableGPRS(connection);
+  Sleep(2000);
   return connection;
 }
+
+async function getData(connection: net.Socket) {
+  connection.on('data', function (data: Buffer) {
+    loopOverData(data);
+  });
+}
+
+export { getData, createTelnetConnection };
