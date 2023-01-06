@@ -12,7 +12,9 @@ datasource db {
 
 model Car {
   id        String    @default(uuid())
+  group     String?
   name      String    @unique
+  term      String?
   longitude Float
   latitude  Float
   timestamp DateTime

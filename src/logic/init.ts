@@ -5,6 +5,8 @@ import { prisma } from '../db/prisma.js';
 export async function init() {
   await prisma.car.deleteMany({});
   etrackAPI.listen(env.APIPORT, () => {
-    console.log(`API is running on http://0.0.0.0:${env.APIPORT}`);
+    console.log(
+      `API is running on http://${env.COMPUTERNAME}:${env.APIPORT}/cars`
+    );
   });
 }

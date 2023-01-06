@@ -66,7 +66,7 @@ async function createTelnetConnection(): Promise<net.Socket> {
 
   const connection = await connectToTelnet(connectionParams).catch(() => {
     throw new Error(
-      `Verbindung konnte nicht hergestellt werden, Port oder Host pruefen! \n HOST: ${env.MTRACKHOST}`
+      `Verbindung konnte nicht hergestellt werden, Netzwerkverbindung, Port oder Host pruefen! \n HOST: ${env.MTRACKHOST}`
     );
   });
   const data = await nextData(connection);
