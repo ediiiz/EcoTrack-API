@@ -1,8 +1,8 @@
-# EcoTrack API
+# EcoTrack API (WIP)
 
 ## Features
 
-- Konvertiert die MTrack Daten zu einer REST API
+- Konvertiert die MTrack Telnet Daten zu einer REST API um daraus bessere Frontend-Anwendungen zu erstellen. 
 
 ## Install
 
